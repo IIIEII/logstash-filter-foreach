@@ -5,7 +5,7 @@ require "logstash/namespace"
 # This  filter will split event by array field, and later join back
 class LogStash::Filters::Foreach < LogStash::Filters::Base
 
-  FAILURE_TAG = '_foreach_type_failure'.freeze
+  FAILURE_TAG = '_foreach_failure'.freeze
 
   #
   # filter {
@@ -68,95 +68,174 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
     end
 
 
-  end # def register
+  end
+
+  # def register
 
   public
   def filter(event)
 
+    @logger.debug("Foreach plugin:", :task_id => @task_id, :array_field => @array_field, :join_fields => @join_fields, :end => @end, :timeout => @timeout, :event => event.to_hash)
 
-    @logger.debug("For task_id pattern '#{@task_id}' @@event_data = #{@@event_data.inspect()}")
+    passthrough = false
 
     task_id = event.sprintf(@task_id)
+    if task_id.nil? || task_id == @task_id
 
-    @@mutex.synchronize do
+      @logger.trace("Foreach plugin: if task_id.nil? || task_id == @task_id");
 
-      if !@@configuration_data.has_key?(@task_id) or !@@configuration_data[@task_id].end_filter_configured
-        raise LogStash::ConfigurationError, "Foreach plugin: For task_id pattern '#{@task_id}', there should be one `start` and one `end` filter."
-      end
+      @logger.warn("Foreach plugin: #{@task_id} should be calculated into value (not '#{task_id}'). Passing through")
+      event.tag(FAILURE_TAG)
+      passthrough = true
 
-      configuration = @@configuration_data[@task_id]
+    else
 
-      if !@@event_data.has_key?(task_id)
-        @@event_data[task_id] = LogStash::Filters::Foreach::Element.new(configuration, Time.now(),event.clone, configuration.join_fields)
-      end
+      @logger.trace("Foreach plugin: else task_id.nil? || task_id == @task_id");
 
-      event_data = @@event_data[task_id]
+      @@mutex.synchronize do
 
-      if !@end
+        if !@@configuration_data.has_key?(@task_id) or !@@configuration_data[@task_id].end_filter_configured
 
-        splits = event.remove(@array_field)
+          @logger.trace("Foreach plugin: if !@@configuration_data.has_key?(@task_id) or !@@configuration_data[@task_id].end_filter_configured");
 
-        if !splits.is_a?(Array)
-          @logger.warn("Foreach plugin: Field should by of Array type. field:#{@array_field} is of type = #{splits.class}")
-          event.tag(FAILURE_TAG)
-          return
+          raise LogStash::ConfigurationError, "Foreach plugin: For task_id pattern '#{@task_id}', there should be one `start` and one `end` filter."
         end
 
-        splits.each do |value|
-          next if value.nil? or value.empty?
+        configuration = @@configuration_data[@task_id]
 
-          event_split = event.clone
-          @logger.debug("Foreach plugin: Split event", :field => @array_field, :value => value)
-          event_split.set(@array_field, value)
-          event_data.counter += 1
-          filter_matched(event_split)
+        if !@end
 
-          # Push this new event onto the stack at the LogStash::FilterWorker
-          yield event_split
-        end
+          @logger.trace("Foreach plugin: if !@end");
 
-        # Cancel this event, we'll use the newly generated ones above.
-        event.cancel
+          array_field = event.get(@array_field)
 
-      else
+          if !array_field.is_a?(Array)
 
-        @logger.debug("Foreach plugin: Join event back", :field => configuration.array_field, :value => event.get(configuration.array_field))
+            @logger.trace("Foreach plugin: if !array_field.is_a?(Array)");
 
-        event_data.lastevent_timestamp = Time.now()
+            @logger.warn("Foreach plugin: Field should be of Array type. field:#{@array_field} is of type = #{array_field.class}. Passing through")
+            event.tag(FAILURE_TAG)
+            passthrough = true
 
-        configuration.join_fields.each do |join_field|
-          event_data.join_fields[join_field] += [*event.get(join_field)]
-        end
-        event_data.counter -= 1
+          elsif @@event_data.has_key?(task_id)
 
-        if event_data.counter == 0
-          configuration.join_fields.each do |join_field|
-            event_data.initial_event.set(join_field, event_data.join_fields[join_field])
+            @logger.trace("Foreach plugin: elsif @@event_data.has_key?(task_id)");
+
+            @logger.warn("Foreach plugin: task_id whould be unique. Duplicate value found: '#{task_id}'. Passing through")
+            event.tag(FAILURE_TAG)
+            passthrough = true
+
+          else
+
+            @logger.trace("Foreach plugin: else !array_field.is_a?(Array)");
+
+            @@event_data[task_id] = LogStash::Filters::Foreach::Element.new(configuration, Time.now(), event.clone, configuration.join_fields)
+            event_data = @@event_data[task_id]
+
+            array_field.each do |value|
+
+              @logger.trace("Foreach plugin: array_field.each do |value|", :value => value);
+
+              next if value.nil? or value.empty?
+
+              event_split = event.clone
+              @logger.debug("Foreach plugin: Split event", :field => @array_field, :value => value)
+              event_split.set(@array_field, value)
+              event_data.counter += 1
+
+              filter_matched(event_split)
+              yield event_split
+            end
+
+            event.cancel
+
           end
-          filter_matched(event_data.initial_event)
-          yield event_data.initial_event
-          @@event_data.delete(task_id)
+
+        else
+
+          @logger.trace("Foreach plugin: else !@end");
+
+          if !@@event_data.has_key?(task_id)
+
+            @logger.trace("Foreach plugin: if !@@event_data.has_key?(task_id)");
+
+            @logger.warn("Foreach plugin: found `end` event fot task_id = '#{task_id}' without `start` event. Passing through")
+            event.tag(FAILURE_TAG)
+            passthrough = true
+
+          else
+
+            @logger.trace("Foreach plugin: else !@@event_data.has_key?(task_id)");
+
+            @logger.debug("Foreach plugin: Join event back", :field => configuration.array_field, :value => event.get(configuration.array_field))
+
+            event_data = @@event_data[task_id]
+            event_data.lastevent_timestamp = Time.now()
+
+            configuration.join_fields.each do |join_field|
+              event_data.join_fields[join_field] += [*event.get(join_field)]
+            end
+            event_data.counter -= 1
+
+            if event_data.counter == 0
+
+              @logger.trace("Foreach plugin: if event_data.counter == 0");
+
+              configuration.join_fields.each do |join_field|
+                event_data.initial_event.set(join_field, event_data.join_fields[join_field])
+              end
+              filter_matched(event_data.initial_event)
+              yield event_data.initial_event
+              @@event_data.delete(task_id)
+            end
+
+            event.cancel
+
+          end
+
         end
 
-        event.cancel
+      end # @@mutex.synchronize
 
-      end # if !@end
+    end # task_id.nil? || task_id == @task_id
 
-    end # @@mutex.synchronize
+    if passthrough
 
-  end # def filter
+      @logger.trace("Foreach plugin: if passthrough");
+
+      filter_matched(event)
+    end
+
+  end
+
+  # def filter
 
   def flush(options = {})
-    @@mutex.synchronize do
-      @@event_data.each do |task_id, obj|
-        if obj.lastevent_timestamp < Time.now() - obj.configuration.timeout
-          @@event_data.delete(task_id)
+    events_to_flush = []
+    if @end
+      @@mutex.synchronize do
+        @@event_data.each do |task_id, obj|
+          if obj.lastevent_timestamp < Time.now() - obj.configuration.timeout
+            if obj.counter < obj.sub_events_count
+              obj.configuration.join_fields.each do |join_field|
+                obj.initial_event.set(join_field, obj.join_fields[join_field])
+              end
+              events_to_flush << obj.initial_event
+            end
+            @@event_data.delete(task_id)
+          end
         end
-      end
-    end # @@mutex.synchronize
-    return []
+      end # @@mutex.synchronize
+    end
+    return events_to_flush
 
-  end # def flush
+  end
+
+  # def flush
+
+  def periodic_flush
+    true
+  end
 
 end # class LogStash::Filters::Foreach
 
@@ -175,7 +254,7 @@ end
 
 class LogStash::Filters::Foreach::Element
 
-  attr_accessor :initial_event, :counter, :join_fields, :lastevent_timestamp, :configuration
+  attr_accessor :initial_event, :counter, :sub_events_count, :join_fields, :lastevent_timestamp, :configuration
 
   def initialize(configuration, creation_timestamp, event, join_fields)
     # @creation_timestamp = creation_timestamp
@@ -183,6 +262,7 @@ class LogStash::Filters::Foreach::Element
     @lastevent_timestamp = creation_timestamp
     @initial_event = event
     @counter = 0
+    @sub_events_count = event.get(configuration.array_field).length
     @join_fields = {}
     join_fields.each do |join_field|
       @join_fields[join_field] = []
