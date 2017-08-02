@@ -217,10 +217,13 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
         @@event_data.each do |task_id, obj|
           if obj.lastevent_timestamp < Time.now() - obj.configuration.timeout
             if obj.counter < obj.sub_events_count
+              @logger.warn("Foreach plugin: Flushing partly processed event with task_id = '#{obj.initial_event.sprintf(@task_id)}' after timeout = '#{obj.configuration.timeout.to_s}'")
               obj.configuration.join_fields.each do |join_field|
                 obj.initial_event.set(join_field, obj.join_fields[join_field])
               end
               events_to_flush << obj.initial_event
+            else
+              @logger.warn("Foreach plugin: Removing unprocessed event with task_id = '#{obj.initial_event.sprintf(@task_id)}' after timeout = '#{obj.configuration.timeout.to_s}'")
             end
             @@event_data.delete(task_id)
           end
