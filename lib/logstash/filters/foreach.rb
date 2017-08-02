@@ -68,9 +68,7 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
     end
 
 
-  end
-
-  # def register
+  end # def register
 
   public
   def filter(event)
@@ -206,9 +204,7 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
       filter_matched(event)
     end
 
-  end
-
-  # def filter
+  end # def filter
 
   def flush(options = {})
     events_to_flush = []
@@ -232,12 +228,15 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
     end
     return events_to_flush
 
-  end
-
-  # def flush
+  end # def flush
 
   def periodic_flush
     true
+  end
+
+  public
+  def close
+    @@configuration_data = {}
   end
 
 end # class LogStash::Filters::Foreach

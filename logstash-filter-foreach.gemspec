@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name          = 'logstash-filter-foreach'
-  s.version       = '0.1.0'
+  s.version       = '0.1.1'
   s.licenses      = ['Apache-2.0']
   s.summary       = 'Process filters for every array item'
   s.description   = 'Plugin splits event for every item in array, then you could process other filters for every item and then join event back'
