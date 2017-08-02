@@ -215,6 +215,38 @@ describe LogStash::Filters::Foreach do
       end
     end
 
+    describe "should omit processing for event with array_field = []" do
+      let(:config) do
+        <<-CONFIG
+        filter {
+          foreach {
+            task_id => "%{task_id}"
+            array_field => "array"
+            join_fields => ["join"]
+          }
+
+          mutate {
+            add_field => { "join" => "%{array}_changed" }
+          }
+
+          foreach {
+            task_id => "%{task_id}"
+            end => true
+          }
+        }
+        CONFIG
+      end
+
+      sample("task_id" => 1, "array" => [], "unchanged" => "unchanged_value") do
+        insist { subject.is_a?(LogStash::Event) } == true
+        insist { subject.get("array").is_a?(Array) } == true
+        insist { subject.get("array") } == []
+        insist { subject.get("join").nil? } == true
+        insist { subject.get("unchanged").is_a?(String) } == true
+        insist { subject.get("unchanged") } == "unchanged_value"
+      end
+    end
+
     describe "should split and join (partly) correctly" do
       let(:config) do
         <<-CONFIG

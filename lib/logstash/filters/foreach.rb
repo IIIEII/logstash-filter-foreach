@@ -130,26 +130,32 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
             @@event_data[task_id] = LogStash::Filters::Foreach::Element.new(configuration, Time.now(), event.clone, configuration.join_fields)
             event_data = @@event_data[task_id]
 
-            array_field.each do |value|
+            if array_field.length == 0
 
-              @logger.trace("Foreach plugin: array_field.each do |value|", :value => value);
+              passthrough = true
 
-              next if value.nil? or value.empty?
+            else
+              array_field.each do |value|
 
-              event_split = event.clone
-              @logger.debug("Foreach plugin: Split event", :field => @array_field, :value => value)
-              event_split.set(@array_field, value)
-              event_data.counter += 1
+                @logger.trace("Foreach plugin: array_field.each do |value|", :value => value);
 
-              filter_matched(event_split)
-              yield event_split
+                next if value.nil? or value.empty?
+
+                event_split = event.clone
+                @logger.debug("Foreach plugin: Split event", :field => @array_field, :value => value)
+                event_split.set(@array_field, value)
+                event_data.counter += 1
+
+                filter_matched(event_split)
+                yield event_split
+              end
+
+              event.cancel
             end
-
-            event.cancel
 
           end
 
-        else
+        else # if !@end
 
           @logger.trace("Foreach plugin: else !@end");
 
@@ -168,24 +174,35 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
             @logger.debug("Foreach plugin: Join event back", :field => configuration.array_field, :value => event.get(configuration.array_field))
 
             event_data = @@event_data[task_id]
-            event_data.lastevent_timestamp = Time.now()
 
-            configuration.join_fields.each do |join_field|
-              event_data.join_fields[join_field] += [*event.get(join_field)]
-            end
-            event_data.counter -= 1
+            if event_data.sub_events_count == 0
 
-            if event_data.counter == 0
-
-              @logger.trace("Foreach plugin: if event_data.counter == 0");
-
-              configuration.join_fields.each do |join_field|
-                event_data.initial_event.set(join_field, event_data.join_fields[join_field])
-              end
               filter_matched(event_data.initial_event)
               yield event_data.initial_event
               @@event_data.delete(task_id)
-            end
+
+            else
+
+              event_data.lastevent_timestamp = Time.now()
+
+              configuration.join_fields.each do |join_field|
+                event_data.join_fields[join_field] += [*event.get(join_field)]
+              end
+              event_data.counter -= 1
+
+              if event_data.counter == 0
+
+                @logger.trace("Foreach plugin: if event_data.counter == 0");
+
+                configuration.join_fields.each do |join_field|
+                  event_data.initial_event.set(join_field, event_data.join_fields[join_field])
+                end
+                filter_matched(event_data.initial_event)
+                yield event_data.initial_event
+                @@event_data.delete(task_id)
+              end
+
+            end # if event_data.sub_events_count == 0
 
             event.cancel
 
