@@ -492,5 +492,37 @@ describe LogStash::Filters::Foreach do
         insist { subject.get("[@metadata][unchanged]") } == "unchanged_value"
       end
     end
+
+    describe "should not set empty arrays" do
+      let(:config) do
+        <<-CONFIG
+        filter {
+          foreach {
+            task_id => "%{task_id}"
+            array_field => "array"
+            join_fields => ["join", "join2"]
+          }
+
+          mutate {
+            add_field => { "join" => "%{array}_changed" }
+          }
+
+          foreach {
+            task_id => "%{task_id}"
+            end => true
+          }
+        }
+        CONFIG
+      end
+
+      sample("task_id" => 1, "array" => ["big", "bird", "sesame street"], "unchanged" => "unchanged_value") do
+        insist { subject.is_a?(LogStash::Event) } == true
+        insist { subject.get("array").is_a?(Array) } == true
+        insist { subject.get("array") } == ["big", "bird", "sesame street"]
+        insist { subject.get("join").is_a?(Array) } == true
+        insist { subject.get("join") } == ["big_changed", "bird_changed", "sesame street_changed"]
+        insist { subject.get("join2").nil? } == true
+      end
+    end
   end
 end

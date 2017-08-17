@@ -186,18 +186,13 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
 
               event_data.lastevent_timestamp = Time.now()
 
-              configuration.join_fields.each do |join_field|
-                event_data.join_fields[join_field] += [*event.get(join_field)]
-              end
+              event_data.add_join_fields_values(event)
               event_data.counter -= 1
 
               if event_data.counter == 0
 
                 @logger.trace("Foreach plugin: if event_data.counter == 0");
 
-                configuration.join_fields.each do |join_field|
-                  event_data.initial_event.set(join_field, event_data.join_fields[join_field])
-                end
                 ret_event = event_data.event()
                 filter_matched(ret_event)
                 yield ret_event
@@ -233,10 +228,7 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
           if obj.lastevent_timestamp < Time.now() - obj.configuration.timeout
             if obj.counter < obj.sub_events_count
               @logger.warn("Foreach plugin: Flushing partly processed event with task_id = '#{obj.initial_event.sprintf(@task_id)}' after timeout = '#{obj.configuration.timeout.to_s}'")
-              obj.configuration.join_fields.each do |join_field|
-                obj.initial_event.set(join_field, obj.join_fields[join_field])
-              end
-              events_to_flush << obj.initial_event
+              events_to_flush << obj.event()
             else
               @logger.warn("Foreach plugin: Removing unprocessed event with task_id = '#{obj.initial_event.sprintf(@task_id)}' after timeout = '#{obj.configuration.timeout.to_s}'")
             end
@@ -291,8 +283,19 @@ class LogStash::Filters::Foreach::Element
     end
   end
 
+  def add_join_fields_values(event)
+    @configuration.join_fields.each do |join_field|
+      @join_fields[join_field] += [*event.get(join_field)]
+    end
+  end
+
   def event()
     e = @initial_event.clone
+    @configuration.join_fields.each do |join_field|
+      if @join_fields[join_field].length > 0
+        e.set(join_field, @join_fields[join_field])
+      end
+    end
     e.set('@metadata', @initial_metadata)
     return e
   end
