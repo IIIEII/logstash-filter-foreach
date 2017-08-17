@@ -153,6 +153,72 @@ describe LogStash::Filters::Foreach do
       end
     end
 
+    describe "should split and join correctly with nested field" do
+      let(:config) do
+        <<-CONFIG
+        filter {
+          foreach {
+            task_id => "%{task_id}"
+            array_field => "[array][nested]"
+            join_fields => ["join"]
+          }
+
+          mutate {
+            add_field => { "join" => "%{[array][nested]}_changed" }
+          }
+
+          foreach {
+            task_id => "%{task_id}"
+            end => true
+          }
+        }
+        CONFIG
+      end
+
+      sample("task_id" => 1, "array" => {"nested" => ["big", "bird", "sesame street"]}, "unchanged" => "unchanged_value") do
+        insist { subject.is_a?(LogStash::Event) } == true
+        insist { subject.get("[array][nested]").is_a?(Array) } == true
+        insist { subject.get("[array][nested]") } == ["big", "bird", "sesame street"]
+        insist { subject.get("join").is_a?(Array) } == true
+        insist { subject.get("join") } == ["big_changed", "bird_changed", "sesame street_changed"]
+        insist { subject.get("unchanged").is_a?(String) } == true
+        insist { subject.get("unchanged") } == "unchanged_value"
+      end
+    end
+
+    describe "should split and join correctly with array joins" do
+      let(:config) do
+        <<-CONFIG
+        filter {
+          foreach {
+            task_id => "%{task_id}"
+            array_field => "array"
+            join_fields => ["join"]
+          }
+
+          mutate {
+            add_field => { "join" => ["%{array}_changed", "%{array}_changed2"] }
+          }
+
+          foreach {
+            task_id => "%{task_id}"
+            end => true
+          }
+        }
+        CONFIG
+      end
+
+      sample("task_id" => 1, "array" => ["big", "bird", "sesame street"], "unchanged" => "unchanged_value") do
+        insist { subject.is_a?(LogStash::Event) } == true
+        insist { subject.get("array").is_a?(Array) } == true
+        insist { subject.get("array") } == ["big", "bird", "sesame street"]
+        insist { subject.get("join").is_a?(Array) } == true
+        insist { subject.get("join") } == ["big_changed", "big_changed2", "bird_changed", "bird_changed2", "sesame street_changed", "sesame street_changed2"]
+        insist { subject.get("unchanged").is_a?(String) } == true
+        insist { subject.get("unchanged") } == "unchanged_value"
+      end
+    end
+
     describe "should passthrough event with incorrect task_id" do
       let(:config) do
         <<-CONFIG
@@ -363,6 +429,68 @@ describe LogStash::Filters::Foreach do
         end
       end
 
+    end
+
+    describe "should work with @metadata fields" do
+      let(:config) do
+        <<-CONFIG
+        filter {
+          foreach {
+            task_id => "%{task_id}"
+            array_field => "array"
+            join_fields => ["join"]
+          }
+
+          mutate {
+            add_field => { "join" => "%{array}_changed" }
+          }
+
+          foreach {
+            task_id => "%{task_id}"
+            end => true
+          }
+        }
+        CONFIG
+      end
+
+      sample("task_id" => 1, "array" => ["big", "bird", "sesame street"], "@metadata" => {"unchanged" => "unchanged_value"}) do
+        insist { subject.is_a?(LogStash::Event) } == true
+        insist { subject.get("array").is_a?(Array) } == true
+        insist { subject.get("array") } == ["big", "bird", "sesame street"]
+        insist { subject.get("join").is_a?(Array) } == true
+        insist { subject.get("join") } == ["big_changed", "bird_changed", "sesame street_changed"]
+        insist { subject.get("@metadata").is_a?(Object) } == true
+        insist { subject.get("[@metadata][unchanged]") } == "unchanged_value"
+      end
+    end
+
+    describe "should pass @metadata fields" do
+      let(:config) do
+        <<-CONFIG
+        filter {
+          foreach {
+            task_id => "%{task_id}"
+            array_field => "array"
+            join_fields => ["join"]
+          }
+
+          mutate {
+            add_field => { "join" => "%{array}_changed" }
+          }
+
+          foreach {
+            task_id => "%{task_id}"
+            end => true
+          }
+        }
+        CONFIG
+      end
+
+      sample("task_id" => 1, "@metadata" => {"unchanged" => "unchanged_value"}) do
+        insist { subject.is_a?(LogStash::Event) } == true
+        insist { subject.get("@metadata").is_a?(Object) } == true
+        insist { subject.get("[@metadata][unchanged]") } == "unchanged_value"
+      end
     end
   end
 end

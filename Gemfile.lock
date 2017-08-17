@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    logstash-filter-foreach (0.1.2)
+    logstash-filter-foreach (0.2.0)
       logstash-core-plugin-api (~> 2.0)
 
 GEM

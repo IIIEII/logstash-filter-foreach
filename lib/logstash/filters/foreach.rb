@@ -73,7 +73,7 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
   public
   def filter(event)
 
-    @logger.debug("Foreach plugin:", :task_id => @task_id, :array_field => @array_field, :join_fields => @join_fields, :end => @end, :timeout => @timeout, :event => event.to_hash)
+    @logger.debug("Foreach plugin:", :task_id => @task_id, :array_field => @array_field, :join_fields => @join_fields, :end => @end, :timeout => @timeout, :event => event.to_hash, :metadata => event.get('@metadata'))
 
     passthrough = false
 
@@ -127,7 +127,7 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
 
             @logger.trace("Foreach plugin: else !array_field.is_a?(Array)");
 
-            @@event_data[task_id] = LogStash::Filters::Foreach::Element.new(configuration, Time.now(), event.clone, configuration.join_fields)
+            @@event_data[task_id] = LogStash::Filters::Foreach::Element.new(configuration, Time.now(), event.clone, event.get('@metadata').clone, configuration.join_fields)
             event_data = @@event_data[task_id]
 
             if array_field.length == 0
@@ -177,8 +177,9 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
 
             if event_data.sub_events_count == 0
 
-              filter_matched(event_data.initial_event)
-              yield event_data.initial_event
+              ret_event = event_data.event()
+              filter_matched(ret_event)
+              yield ret_event
               @@event_data.delete(task_id)
 
             else
@@ -197,8 +198,9 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
                 configuration.join_fields.each do |join_field|
                   event_data.initial_event.set(join_field, event_data.join_fields[join_field])
                 end
-                filter_matched(event_data.initial_event)
-                yield event_data.initial_event
+                ret_event = event_data.event()
+                filter_matched(ret_event)
+                yield ret_event
                 @@event_data.delete(task_id)
               end
 
@@ -273,18 +275,25 @@ end
 
 class LogStash::Filters::Foreach::Element
 
-  attr_accessor :initial_event, :counter, :sub_events_count, :join_fields, :lastevent_timestamp, :configuration
+  attr_accessor :initial_event, :initial_metadata, :counter, :sub_events_count, :join_fields, :lastevent_timestamp, :configuration
 
-  def initialize(configuration, creation_timestamp, event, join_fields)
+  def initialize(configuration, creation_timestamp, event, metadata, join_fields)
     # @creation_timestamp = creation_timestamp
     @configuration = configuration
     @lastevent_timestamp = creation_timestamp
     @initial_event = event
+    @initial_metadata = metadata
     @counter = 0
     @sub_events_count = event.get(configuration.array_field).length
     @join_fields = {}
     join_fields.each do |join_field|
       @join_fields[join_field] = []
     end
+  end
+
+  def event()
+    e = @initial_event.clone
+    e.set('@metadata', @initial_metadata)
+    return e
   end
 end
