@@ -524,5 +524,57 @@ describe LogStash::Filters::Foreach do
         insist { subject.get("join2").nil? } == true
       end
     end
+
+    describe "should work with nested loops" do
+      let(:config) do
+        <<-CONFIG
+        filter {
+          foreach {
+            task_id => "%{task_id}"
+            array_field => "array"
+            join_fields => ["join", "join2"]
+          }
+
+          mutate {
+            add_field => { "join" => "%{[array][str]}_changed" }
+          }
+
+          foreach {
+            task_id => "%{task_id}_%{[array][str]}"
+            array_field => "[array][nested]"
+            join_fields => ["join2"]
+          }
+          
+          mutate {
+            add_field => { "join2" => [ "%{[array][nested]}_changed", "%{[array][nested]}_changed2" ] }
+          }
+
+          foreach {
+            task_id => "%{task_id}_%{[array][str]}"
+            end => true
+          }
+
+          foreach {
+            task_id => "%{task_id}"
+            end => true
+          }
+        }
+        CONFIG
+      end
+
+      sample("task_id" => 1, "array" => [{"str" => "big", "nested" => ["nested_big1", "nested_big2"]}, {"str" => "bird", "nested" => ["nested_bird1", "nested_bird2"]}, {"str" => "sesame street", "nested" => ["nested_sesame street1", "nested_sesame street2"]}], "unchanged" => "unchanged_value") do
+        insist { subject.is_a?(LogStash::Event) } == true
+        insist { subject.get("join").is_a?(Array) } == true
+        insist { subject.get("join") } == ["big_changed", "bird_changed", "sesame street_changed"]
+        insist { subject.get("join2").is_a?(Array) } == true
+        insist { subject.get("join2") } == [
+            "nested_big1_changed", "nested_big1_changed2", "nested_big2_changed", "nested_big2_changed2",
+            "nested_bird1_changed", "nested_bird1_changed2", "nested_bird2_changed", "nested_bird2_changed2",
+            "nested_sesame street1_changed", "nested_sesame street1_changed2", "nested_sesame street2_changed", "nested_sesame street2_changed2"
+        ]
+        insist { subject.get("unchanged").is_a?(String) } == true
+        insist { subject.get("unchanged") } == "unchanged_value"
+      end
+    end
   end
 end

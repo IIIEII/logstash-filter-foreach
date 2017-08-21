@@ -119,7 +119,7 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
 
             @logger.trace("Foreach plugin: elsif @@event_data.has_key?(task_id)");
 
-            @logger.warn("Foreach plugin: task_id whould be unique. Duplicate value found: '#{task_id}'. Passing through")
+            @logger.warn("Foreach plugin: task_id should be unique. Duplicate value found: '#{task_id}'. Passing through")
             event.tag(FAILURE_TAG)
             passthrough = true
 
