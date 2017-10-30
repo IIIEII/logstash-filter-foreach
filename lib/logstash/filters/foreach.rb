@@ -163,7 +163,7 @@ class LogStash::Filters::Foreach < LogStash::Filters::Base
 
             @logger.trace("Foreach plugin: if !@@event_data.has_key?(task_id)");
 
-            @logger.warn("Foreach plugin: found `end` event fot task_id = '#{task_id}' without `start` event. Passing through")
+            @logger.warn("Foreach plugin: found `end` event for task_id = '#{task_id}' without `start` event. Passing through")
             event.tag(FAILURE_TAG)
             passthrough = true
 
