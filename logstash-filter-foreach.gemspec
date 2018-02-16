@@ -1,12 +1,12 @@
 Gem::Specification.new do |s|
   s.name          = 'logstash-filter-foreach'
-  s.version       = '0.2.2'
+  s.version       = '0.2.3'
   s.licenses      = ['Apache-2.0']
   s.summary       = 'Process filters for every array item'
   s.description   = 'Plugin splits event for every item in array, then you could process other filters for every item and then join event back'
   s.homepage      = 'https://github.com/IIIEII/logstash-filter-foreach'
-  s.authors       = ['IIIEII']
-  s.email         = 'al.iiieii@gmail.com'
+  s.authors       = ['IIIEII', 'Boris Gorbylev']
+  s.email         = ['al.iiieii@gmail.com', 'ekho@ekho.name']
   s.require_paths = ['lib']
 
   # Files
