@@ -285,7 +285,9 @@ class LogStash::Filters::Foreach::Element
 
   def add_join_fields_values(event)
     @configuration.join_fields.each do |join_field|
-      @join_fields[join_field] += [event.get(join_field)].flatten.uniq.compact
+      @join_fields[join_field] += [event.get(join_field)].flatten
+      @join_fields[join_field].uniq!
+      @join_fields[join_field].compact!
     end
   end
 
